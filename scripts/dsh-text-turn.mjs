@@ -27,7 +27,7 @@ await mkdir(home, { recursive: true });
 const config = join(cwd, "runtime.patch.yml");
 const system = messages.filter(item => item.role === "system").map(item => item.content).join("\n\n");
 const conversation = messages.filter(item => item.role !== "system");
-const reasoningEffort = turn.deepSeekReasoning === "low" || turn.deepSeekReasoning === "off" ? turn.deepSeekReasoning : undefined;
+const thinkingFormat = turn.thinkingFormat === "deepseek" || turn.thinkingFormat === "openrouter" ? turn.thinkingFormat : undefined;
 const groupHistory = typeof turn.groupHistoryUrl === "string";
 const historyEndpoint = groupHistory ? turn.groupHistoryUrl : turn.privateHistoryUrl;
 const historyUrl = /^http:\/\/127\.0\.0\.1:\d{1,5}\/[a-f0-9-]{36}$/u.test(historyEndpoint ?? "") ? historyEndpoint : undefined;
@@ -37,7 +37,7 @@ await writeFile(config, JSON.stringify([
     apiKeyEnv: "OHJINGJING_DSH_TURN_KEY", api: "openai-completions", baseURL: profile.baseUrl,
     models: [{ id: profile.model, contextWindow: 128000,
       ...(images.length ? { input: ["text", "image"] } : {}),
-      ...(reasoningEffort ? { compat: { thinkingFormat: "deepseek" }, reasoningEfforts: { off: "none", low: "low" } } : {}) }],
+      ...(thinkingFormat ? { compat: { thinkingFormat }, reasoningEfforts: { max: thinkingFormat === "openrouter" ? "xhigh" : "max" } } : {}) }],
     retryPolicy: { mode: "normal", maxRetries: 0 },
   } } } }, { id: "credentials", name: "@deepseek-ai/dsh-credentials-local" }] },
   { id: "system-prompt", config: { includeHarnessIdentity: false, includeRuntimeContext: false, personaPrefix: system } },
@@ -53,7 +53,7 @@ const environment = Object.fromEntries(Object.entries(process.env).filter(([name
   /^(?:SystemRoot|windir|ComSpec|Path|PATHEXT|SystemDrive|OS|TEMP|TMP|HTTPS_PROXY|NO_PROXY|SSL_CERT_FILE)$/iu.test(name)));
 const harness = new DeepSeekHarness({ profile: "sdk-minimal", cwd, processCwd: cwd, dshHome: home, patches: [config],
   provider: "ohjingjing-turn", model: profile.model, maxTokens: turn.maxTokens ?? 1500, initializeTimeoutMs: 10_000,
-  ...(reasoningEffort ? { reasoningEffort } : {}),
+  ...(thinkingFormat ? { reasoningEffort: "max" } : {}),
   env: { ...environment, DSH_PRIMARY_RUNTIME: "", DSH_TELEMETRY: "0", OHJINGJING_DSH_TURN_KEY: key },
 });
 const deadline = AbortSignal.timeout(turn.timeoutMs ?? 25_000);

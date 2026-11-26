@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { maximumThinkingFormat } from "./model-thinking.mjs";
 
 const sdkDirectory = process.env.OHJINGJING_DSH_SDK_ROOT;
 const work = process.cwd();
@@ -11,6 +12,7 @@ const endpoint = new URL(process.env.OHJINGJING_DEVELOPMENT_MODEL_URL);
 if (endpoint.protocol !== "https:" || endpoint.username || endpoint.password || endpoint.search || endpoint.hash) {
   throw new Error("开发模型需要配置有效的 HTTPS 端点。");
 }
+const thinkingFormat = maximumThinkingFormat(endpoint.origin, model);
 const { DeepSeekHarness } = await import(pathToFileURL(resolve(sdkDirectory, "node_modules/@deepseek-ai/dsh-sdk-client/lib/index.js")).href);
 const task = JSON.parse(await readFile(join(work, "development-request.json"), "utf8"));
 const repair = JSON.parse(await readFile(join(work, "development-repair.json"), "utf8")
@@ -25,13 +27,16 @@ const disabled = ["tool-bash", "tool-pwsh", "tool-jobs", "tool-web", "tool-subag
 await writeFile(configuration, JSON.stringify([
   { id: "llm-pi-ai", config: { providers: { "ohjingjing-development": {
     apiKeyEnv: "OHJINGJING_DEVELOPMENT_KEY", api: "openai-completions", baseURL: endpoint.href.replace(/\/$/u, ""),
-    models: [{ id: model, contextWindow: 128000 }], retryPolicy: { mode: "normal", maxRetries: 0 },
+    models: [{ id: model, contextWindow: 128000,
+      ...(thinkingFormat ? { compat: { thinkingFormat }, reasoningEfforts: { max: thinkingFormat === "openrouter" ? "xhigh" : "max" } } : {}) }],
+    retryPolicy: { mode: "normal", maxRetries: 0 },
   } } } },
   ...disabled.map(id => ({ id, disabled: true })),
 ]));
 
 const harness = new DeepSeekHarness({ profile: "sdk", cwd: work, processCwd: work, dshHome: home, patches: [configuration],
   provider: "ohjingjing-development", model, initializeTimeoutMs: 60_000, maxTokens: 16_000,
+  ...(thinkingFormat ? { reasoningEffort: "max" } : {}),
   env: { ...process.env, DSH_PRIMARY_RUNTIME: "", DSH_PERMISSION_MODE: "workspace-write", DSH_TELEMETRY: "0" },
 });
 const abort = () => { void harness.close().catch(() => {}); };

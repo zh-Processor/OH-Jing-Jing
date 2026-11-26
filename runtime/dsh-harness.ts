@@ -4,11 +4,13 @@ import { basename, dirname, isAbsolute, join, normalize } from "node:path";
 import type { Message, ModelProfile } from "./models.js";
 import type { PiLookup } from "./pi-harness.js";
 import { openQqTurnTools, type FindGroupStickers } from "./qq-history-tool.js";
+import type { ThinkingFormat } from "../scripts/model-thinking.mjs";
 
 type Completion = { text: string; refused: boolean; inputTokens: number | null; outputTokens: number | null; local?: true };
 type ImageBlock = { type: "image"; mimeType: string; data: string };
-export type DshTurnOptions = { deepSeekReasoning?: "low" | "off"; privateHistory?: () => string | undefined; groupHistory?: () => string | undefined;
-  groupStickers?: FindGroupStickers; images?: ImageBlock[] };
+export type DshTurnOptions = { privateHistory?: () => string | undefined; groupHistory?: () => string | undefined;
+  groupStickers?: FindGroupStickers };
+type DshRequestOptions = DshTurnOptions & { thinkingFormat?: ThinkingFormat; images?: ImageBlock[] };
 type TurnResult = { ok?: boolean; text?: string; inputTokens?: number | null; outputTokens?: number | null; reason?: string;
   failure?: { code?: unknown; status?: unknown } };
 export class DshUnavailableError extends Error {}
@@ -37,7 +39,7 @@ function requiredPath(name: string) {
 }
 
 async function execute(profile: ModelProfile, key: string, messages: Message[], maxTokens: number | undefined,
-    timeoutMs: number, signal: AbortSignal, options?: DshTurnOptions): Promise<Completion> {
+    timeoutMs: number, signal: AbortSignal, options?: DshRequestOptions): Promise<Completion> {
   signal.throwIfAborted();
   const node = requiredPath("OHJINGJING_DSH_NODE");
   const script = requiredPath("OHJINGJING_DSH_TURN_SCRIPT");
@@ -84,7 +86,7 @@ async function execute(profile: ModelProfile, key: string, messages: Message[], 
       const textMessages = options?.images?.length ? messages.map(({ role, content }) => ({ role, content })) : messages;
       child.stdin.write(JSON.stringify({ profile: { model: profile.model, baseUrl: profile.baseUrl }, key, messages: textMessages,
         images: options?.images, maxTokens, timeoutMs,
-        deepSeekReasoning: options?.deepSeekReasoning,
+        thinkingFormat: options?.thinkingFormat,
         ...(groupTools ? { groupHistoryUrl: localTools?.url } : { privateHistoryUrl: localTools?.url }) }) + "\n");
     });
     const count = (item: number | null | undefined) => Number.isSafeInteger(item) && item! >= 0 ? item! : null;
@@ -113,7 +115,7 @@ async function execute(profile: ModelProfile, key: string, messages: Message[], 
 
 export async function runDshTurn(profile: ModelProfile, key: string, messages: Message[], maxTokens?: number,
     signal?: AbortSignal, timeoutMs = 25_000, lookup?: PiLookup,
-    fallback?: (messages: Message[], signal: AbortSignal, remaining: number) => Promise<Completion>, options?: DshTurnOptions) {
+    fallback?: (messages: Message[], signal: AbortSignal, remaining: number) => Promise<Completion>, options?: DshRequestOptions) {
   const started = Date.now();
   const deadline = AbortSignal.timeout(timeoutMs);
   const turn = signal ? AbortSignal.any([deadline, signal]) : deadline;

@@ -1,6 +1,7 @@
 import { runPiTurn, type PiLookup } from "./pi-harness.js";
 import { DshProviderError, dshImageBlocks, runDshTurn, type DshTurnOptions } from "./dsh-harness.js";
 import type { TurnBackend } from "./harness-rollout.js";
+import { maximumThinkingFormat } from "../scripts/model-thinking.mjs";
 
 export interface ModelProfile {
   id: string;
@@ -132,18 +133,19 @@ export async function complete(profile: ModelProfile, key: string | null, messag
   const base = endpoint.toString().replace(/\/+$/, "");
   const deadline = lookup && timeoutMs !== undefined ? AbortSignal.timeout(timeoutMs) : undefined;
   const turnSignal = deadline && signal ? AbortSignal.any([deadline, signal]) : deadline ?? signal;
-  const supportsDeepSeekReasoning = /^(?:deepseek-flash|deepseek-v4-flash|deepseek-v4-pro)$/u.test(profile.model) &&
-    [...billingAdapters.deepseek.origins, ...billingAdapters.packy.origins].some(origin => origin === endpoint.origin);
-  const deepSeekReasoning = supportsDeepSeekReasoning ? options?.deepSeekReasoning : undefined;
+  const thinkingFormat = maximumThinkingFormat(endpoint.origin, profile.model);
+  // Reasoning and the final answer share the provider's output limit.
+  const outputLimit = thinkingFormat ? Math.max(maxTokens ?? 0, 8192) : maxTokens;
+  const thinking = thinkingFormat === "deepseek" ? { thinking: { type: "enabled" }, reasoning_effort: "max" } :
+    thinkingFormat === "openrouter" ? { reasoning: { effort: "xhigh" } } : {};
   const generate = async (transcript: Message[], modelSignal?: AbortSignal, remaining = timeoutMs) => {
     const result = await request(`${base}/chat/completions`, key, {
       model: profile.model,
       messages: transcript.map(({ role, content, images }) => ({ role, content: images?.length && profile.vision
         ? [{ type: "text", text: content }, ...images.map(url => ({ type: "image_url", image_url: { url } }))] : content })),
       stream: false,
-      ...(maxTokens === undefined ? {} : { max_tokens: maxTokens }),
-      ...(deepSeekReasoning === "off" ? { thinking: { type: "disabled" } } :
-        deepSeekReasoning === "low" ? { thinking: { type: "enabled" }, reasoning_effort: "low" } : {}),
+      ...(outputLimit === undefined ? {} : { max_tokens: outputLimit }),
+      ...thinking,
     }, modelSignal, remaining);
     const choice = result?.choices?.[0];
     const content = choice?.message?.content;
@@ -159,9 +161,9 @@ export async function complete(profile: ModelProfile, key: string | null, messag
   const chosen = backend ?? process.env.OHJINGJING_HARNESS;
   const dshImages = chosen === "dsh" && key ? dshImageBlocks(messages, profile.vision === true) : null;
   const completion = dshImages && key
-    ? await runDshTurn({ ...profile, baseUrl: base }, key, messages, maxTokens, turnSignal, timeoutMs, lookup,
+    ? await runDshTurn({ ...profile, baseUrl: base }, key, messages, outputLimit, turnSignal, timeoutMs, lookup,
       (transcript, fallbackSignal, remaining) => runPiTurn(profile, transcript, (input, modelSignal) => generate(input, modelSignal, remaining), fallbackSignal),
-      { ...options, deepSeekReasoning, images: dshImages })
+      { ...options, thinkingFormat, images: dshImages })
       .catch(rethrowDshProviderError)
     : { ...await runPiTurn(profile, messages, generate, turnSignal, lookup), backend: "pi" as const };
   const { inputTokens, outputTokens, backend: actualBackend, ...reply } = completion;

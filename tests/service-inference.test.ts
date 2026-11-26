@@ -415,14 +415,14 @@ test("unusable DSH background output makes one accounted runtime fallback using 
   await writeFile(script, `import { createInterface } from "node:readline";
 const lines = createInterface({ input: process.stdin });
 lines.once("line", async line => {
-  const { messages, maxTokens, deepSeekReasoning, timeoutMs, privateHistoryUrl } = JSON.parse(line);
+  const { messages, maxTokens, thinkingFormat, timeoutMs, privateHistoryUrl } = JSON.parse(line);
   const task = messages.at(-1).content;
   if (task === "native-private-read-fallback") {
     const response = await fetch(privateHistoryUrl, { method: "POST", body: JSON.stringify({ jsonrpc: "2.0", id: 1,
       method: "tools/call", params: { name: "read_history", arguments: {} } }) });
     if (!(await response.json()).result.content[0].text.includes("青灯站台")) process.exit(2);
   }
-  const result = task === "thinking-preview" ? { ok: true, text: deepSeekReasoning ?? "default" } :
+  const result = task === "thinking-preview" ? { ok: true, text: thinkingFormat ? thinkingFormat + ":" + maxTokens : "default" } :
     task === "refused" ? { ok: false, failure: { code: "CONTENT_REFUSED" } } :
     task === "slow-first-private" ? timeoutMs >= 16000 ? { ok: true, text: "DSH completed the turn" } : { ok: false, reason: "timeout" } :
     task === "private-timeout" ? timeoutMs < 25000 ? { ok: false, reason: "timeout" } : { ok: true, text: "no fallback time" } :
@@ -484,16 +484,18 @@ lines.once("line", async line => {
   assert.equal(budget.snapshot().background.daily.used, 5);
 
   const flash = { ...model, model: "deepseek-v4-flash", baseUrl: "https://cf.api.fan/v1" };
-  const preview = (profile: ModelProfile, options?: { deepSeekReasoning: "low" }) => complete(profile, "fixture-key",
-    [{ role: "user", content: "thinking-preview" }], 48, undefined, 3000, undefined, "dsh", options);
-  assert.equal((await preview(flash, { deepSeekReasoning: "low" })).text, "low");
-  assert.equal((await preview(flash)).text, "default");
-  assert.equal((await preview({ ...flash, baseUrl: "https://model.example.org/v1" }, { deepSeekReasoning: "low" })).text, "default");
-  assert.equal((await preview({ ...flash, model: "custom-model" }, { deepSeekReasoning: "low" })).text, "default");
+  const preview = (profile: ModelProfile, maxTokens = 48) => complete(profile, "fixture-key",
+    [{ role: "user", content: "thinking-preview" }], maxTokens, undefined, 3000, undefined, "dsh");
+  assert.equal((await preview(flash)).text, "deepseek:8192");
+  assert.equal((await preview(flash, 16_000)).text, "deepseek:16000");
+  assert.equal((await preview({ ...flash, baseUrl: "https://model.example.org/v1" })).text, "default");
+  assert.equal((await preview({ ...flash, model: "custom-model" })).text, "default");
+  const router = { ...flash, model: "deepseek/deepseek-v4.1-flash", baseUrl: "https://openrouter.ai/api/v1" };
+  assert.equal((await preview(router)).text, "openrouter:8192");
   assert.ok(budget.update({ ...budget.snapshot().policy, background: { daily: 6, monthly: null } }));
   const summaryBinding = { ...models.get("summary")!, model: flash };
   const summaryReasoning = await infer(scope, [{ role: "user", content: "thinking-preview" }], "summary", undefined, summaryBinding);
-  assert.equal(summaryReasoning.text, "off");
+  assert.equal(summaryReasoning.text, "deepseek:8192");
 
   assert.ok(budget.update({ ...budget.snapshot().policy, background: { daily: 7, monthly: null } }));
   const badReview = await infer(scope, [{ role: "user", content: "malformed" }], "summary", undefined, undefined,
@@ -506,10 +508,10 @@ lines.once("line", async line => {
   assert.equal(store.db.prepare("SELECT COUNT(*) AS count FROM requests WHERE background_job_id=?").get(job)?.count, 1);
   assert.equal(budget.snapshot().background.daily.used, 7);
 
-  const wire: { thinking?: { type: string }; messages: Message[] }[] = [];
+  const wire: { thinking?: { type: string }; reasoning_effort?: string; reasoning?: { effort: string }; max_tokens?: number; messages: Message[] }[] = [];
   const network = globalThis.fetch;
   t.mock.method(globalThis, "fetch", async (url: URL | string, options?: RequestInit) => {
-    if (String(url) !== "https://cf.api.fan/v1/chat/completions") return network(url, options);
+    if (!["https://cf.api.fan/v1/chat/completions", "https://openrouter.ai/api/v1/chat/completions"].includes(String(url))) return network(url, options);
     wire.push(JSON.parse(String(options?.body)));
     return Response.json({ choices: [{ message: { content: acceptedSummary } }], usage: { prompt_tokens: 10, completion_tokens: 5 } });
   });
@@ -518,13 +520,15 @@ lines.once("line", async line => {
   const sameBatch = await infer(scope, topicPrompt(batch, []), "summary", undefined, summaryBinding,
     { backgroundJobId: fastFallbackJob, acceptText: text => !!readTopicSummary(text, batch, [], true) });
   assert.equal(sameBatch.text, acceptedSummary);
-  assert.deepEqual(wire.map(body => body.thinking), [{ type: "disabled" }]);
+  const thinkingFields = ({ thinking, reasoning_effort, max_tokens }: typeof wire[number]) => ({ thinking, reasoning_effort, max_tokens });
+  const deepSeekMax = { thinking: { type: "enabled" }, reasoning_effort: "max", max_tokens: 8192 };
+  assert.deepEqual(wire.map(thinkingFields), [deepSeekMax]);
   assert.deepEqual(attempts.forJob(fastFallbackJob).map(row => [row.stage, row.backend, row.status, row.reason]), [
     ["primary", "dsh", "failed", "format"], ["runtime-fallback", "pi", "ok", null],
   ]);
   assert.equal(budget.snapshot().background.daily.used, 9);
   const privateReasoning = await infer("qq-private:1001:2001", [{ role: "user", content: "thinking-preview" }], "private", undefined, summaryBinding);
-  assert.equal(privateReasoning.text, "off");
+  assert.equal(privateReasoning.text, "deepseek:8192");
   const firstPrivate = await infer("qq-private:1001:2001", [{ role: "user", content: "slow-first-private" }], "private",
     undefined, summaryBinding, { decideLookup: () => undefined });
   assert.equal(firstPrivate.text, "DSH completed the turn");
@@ -533,7 +537,10 @@ lines.once("line", async line => {
     undefined, summaryBinding, { decideLookup: () => undefined });
   assert.equal(recoveredPrivate.text, acceptedSummary);
   assert.equal(recoveredPrivate.backend, "pi");
-  assert.deepEqual(wire.map(body => body.thinking), [{ type: "disabled" }, { type: "disabled" }]);
+  assert.deepEqual(wire.map(thinkingFields), [deepSeekMax, deepSeekMax]);
+  await complete(router, "fixture-key", [{ role: "user", content: "桌宠聊天" }], undefined, undefined, undefined, undefined, "pi");
+  assert.deepEqual(wire.at(-1)?.reasoning, { effort: "xhigh" });
+  assert.equal(wire.at(-1)?.reasoning_effort, undefined);
   assert.deepEqual(store.db.prepare(`SELECT a.stage, a.backend, a.reason FROM service_model_attempts a JOIN requests r ON r.id=a.request_id
     WHERE r.scope=? ORDER BY r.id DESC LIMIT 2`).all("private:qq-private:1001:2001").map(row => [row.stage, row.backend, row.reason]),
     [["runtime-fallback", "pi", null], ["primary", "dsh", "timeout"]]);

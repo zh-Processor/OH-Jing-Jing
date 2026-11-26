@@ -1411,7 +1411,6 @@ export function createGroupService(options: GroupServiceOptions, additionalPlugi
           : calledByName && initialSpeech === undefined ? together.trimStart().slice(role.name.length) : together;
         const selfContainedDraft = !message.referenceId && isStandaloneGroupDraft(recallQuery);
         const groupedRequest = !web && additions.length > 0;
-        const longBurst = groupedRequest && partsOfRequest.some(part => part.length > 500);
         const forwardLines = [current, ...additions, quotedMember].filter(line => line?.hasForward);
         const hasForward = !web && forwardLines.length > 0;
         const forward = forwardLines.find(line => line?.actorId === message.actorId && line.eventId);
@@ -1575,7 +1574,7 @@ export function createGroupService(options: GroupServiceOptions, additionalPlugi
           : webByHarness ? (text: string) => !!readGroupReply(text, expressions).length || !!decideLookup(text) ||
             (optionalContinuation && readConversationDecision(text)?.action === "skip") : undefined;
         const result = planned ? await infer(scope, planned.messages, "reply", signal, binding, { replyTraceId: trace, lookup,
-            acceptText, reasonOverCurrent: longBurst,
+            acceptText,
             groupHistory: canReadGroupHistory && groupLookup?.hasEvidence && !hasPublicPageAddress(toolRequest) ? readGroupHistory : undefined,
             groupStickers: canFindStickers && !hasPublicPageAddress(toolRequest) ? findGroupStickers : undefined,
             groupHistoryFallback: deferredLookup ? () => historyRead ? deferredLookup : undefined : undefined,
@@ -3102,7 +3101,7 @@ export function createGroupService(options: GroupServiceOptions, additionalPlugi
         profileJobs.set(scope, controller);
         try {
           const { text: output, blocked, failure } = await infer(scope, profilePrompt(subject, sample, previous), "profile", controller.signal, binding,
-            { backgroundJobId: job, groupProfile: group, acceptText: text => !!readProfileSuggestion(text, sample, group) });
+            { backgroundJobId: job, acceptText: text => !!readProfileSuggestion(text, sample, group) });
           if (stopping || controller.signal.aborted || !policyFor(scope).summary) {
             const manually = controller.signal.reason === "operator";
             return finish({ state: "cancelled", reason: manually ? "operator" : "interrupted" }, 409,

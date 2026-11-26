@@ -15,14 +15,12 @@ type AttemptResult = { text: string | null; failure?: SummaryFailure; blocked?: 
 type InferenceContext = ModelAttemptLinks & {
   routeTestAttempts?: (number | bigint)[]; lookup?: PiLookup; acceptText?: (text: string) => boolean; backendScope?: string;
   summaryReviewMs?: number;
-  groupProfile?: boolean;
   decideLookup?: (text: string) => SemanticWebDecision | undefined;
   privateHistory?: () => string | undefined;
   groupHistory?: () => string | undefined;
   groupStickers?: FindGroupStickers;
   groupHistoryFallback?: () => PiLookup | undefined;
   onPublicLookup?: () => void;
-  reasonOverCurrent?: boolean;
 };
 
 function reusePublicEvidence(lookup: PiLookup | undefined, onRead?: () => void): PiLookup | undefined {
@@ -51,7 +49,6 @@ export function serviceInference(models: ReturnType<typeof openServiceModels>, b
     const shortTurn = shortDraft || groupConversation || purpose === "private-greeting" || purpose === "group-reminder";
     const selectedBackend = backendFor?.(purpose, links?.backendScope ?? scope);
     const dshProfile = purpose === "profile" && selectedBackend === "dsh";
-    const fastGroupProfile = dshProfile && links?.groupProfile;
     const reviewingSummary = purpose === "summary" && links?.summaryReviewMs !== undefined;
     const totalTimeout = reviewingSummary ? links.summaryReviewMs! : purpose === "summary" || dshProfile ? summaryTimeout : shortTurn ? 15_000 : 25_000;
     const limit = reviewingSummary ? 450 : shortDraft || purpose === "group-reminder" ? 460 : groupConversation ? 240 : purpose === "private-greeting" ? 120
@@ -95,14 +92,9 @@ export function serviceInference(models: ReturnType<typeof openServiceModels>, b
       let result: Awaited<ReturnType<typeof complete>>;
       try {
         if (engine) attempts.backend(id, engine);
-        const fastSummary = selectedBackend === "dsh" && purpose === "summary";
-        const interactiveText = !transcript.some(message => message.images?.length) && (purpose === "private" || purpose === "reply");
-        const reasoning = engine === "dsh" && links?.reasonOverCurrent ? "low" :
-          fastSummary || fastGroupProfile || privateFallback || groupFallback || (engine === "dsh" && (groupConversation || shortDraft || interactiveText)) ? "off" :
-          engine === "dsh" && dshProfile ? "low" : undefined;
         const nativeTools = engine === "dsh" && stage === "primary";
         result = await complete(model, key ?? null, transcript, limit, signal, timeout, lookup, engine, {
-          deepSeekReasoning: reasoning, privateHistory: nativeTools ? trackPrivateHistory : undefined,
+          privateHistory: nativeTools ? trackPrivateHistory : undefined,
           groupHistory: nativeTools ? links?.groupHistory : undefined,
           groupStickers: nativeTools && purpose === "reply" ? links?.groupStickers : undefined,
         });

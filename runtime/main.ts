@@ -827,7 +827,7 @@ async function request(action: string, args: any, frame: CredentialFrame) {
       let status: "ok" | "failed" | "cancelled" = "failed";
       try {
         result = await complete(model, apiKey, desktopInteractionPrompt(batch, sources), 1100, undefined, 20_000, undefined,
-          desktopBackend(purpose, model), { deepSeekReasoning: "low" });
+          desktopBackend(purpose, model));
         if (!result.text || result.refused) throw new Error("模型未返回互动复盘，可以重试。");
         const { overview, followUps, memoryOutput } = readDesktopInteraction(result.text, batch);
         const generated = saveConfiguration(() => {
@@ -867,7 +867,7 @@ async function request(action: string, args: any, frame: CredentialFrame) {
       let status: "ok" | "failed" | "cancelled" = "failed";
       try {
         result = await complete(model, apiKey, memoryExtractionPrompt(sources), 850, undefined, 15_000, undefined,
-          desktopBackend("memory-extraction", model), { deepSeekReasoning: "off" });
+          desktopBackend("memory-extraction", model));
         if (!result.text || result.refused) throw new Error("模型没有返回记忆候选，请稍后重试。");
         const output = result;
         const summary = saveConfiguration(() => {
@@ -961,7 +961,7 @@ async function request(action: string, args: any, frame: CredentialFrame) {
       let output: Pick<RoleRehearsalResult, "outcome" | "parts"> = { outcome: "invalid", parts: [] };
       try {
         result = await complete(model, apiKey, prepared.messages, 800, undefined, 15_000, undefined,
-          desktopBackend("role-rehearsal", model), { deepSeekReasoning: "off" });
+          desktopBackend("role-rehearsal", model));
         if (result.text && !result.refused) output = readRehearsalOutput(result.text, prepared);
         return { ...output, role: info, scenario: prepared.scenario, scene: prepared.scene,
           reason: prepared.reason, reference: prepared.reference, model: model.name } satisfies RoleRehearsalResult;
