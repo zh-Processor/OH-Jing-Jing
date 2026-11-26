@@ -1,0 +1,39 @@
+{
+  "name": "ohjingjing",
+  "version": "0.1.21",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tauri dev",
+    "dev:web": "vite --host 127.0.0.1",
+    "build:web": "vite build",
+    "check": "tsc --noEmit",
+    "build:runtime": "node scripts/build-runtime.mjs",
+    "build:server": "node scripts/build-server.mjs",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "build": "tauri build",
+    "server": "tsx runtime/server.ts"
+  },
+  "dependencies": {
+    "@earendil-works/pi-agent-core": "1.6.0",
+    "@earendil-works/pi-ai": "1.6.0",
+    "@earendil-works/pi-mcp": "1.6.0",
+    "@tauri-apps/api": "^2",
+    "react": "^19",
+    "react-dom": "^19",
+    "saxes": "6.0.0",
+    "silk-wasm": "3.7.1",
+    "ws": "^8.23.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2",
+    "@types/node": "^22",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@types/ws": "^8.18.2",
+    "esbuild": "^0.25",
+    "tsx": "^4",
+    "typescript": "^5.9",
+    "vite": "^7"
+  }
+}

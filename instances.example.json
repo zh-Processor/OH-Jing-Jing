@@ -1,0 +1,7 @@
+{
+  "port": 8760,
+  "instances": [
+    { "id": "first", "name": "机器人一", "config": "instances/first/server.config.json", "start": true },
+    { "id": "second", "name": "机器人二", "config": "instances/second/server.config.json", "start": false }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "name": "ohjingjing-pi-workspace",
+  "private": true,
+  "version": "1.0.0",
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "1.6.0"
+  }
+}

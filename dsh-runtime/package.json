@@ -1,0 +1,10 @@
+{
+  "private": true,
+  "dependencies": {
+    "@deepseek-ai/dsh": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-sdk-client": "0.2.2-rc.5",
+    "node-win-x64": "24.22.3",
+    "node-addon-require-builtin-win32-x64-msvc": "0.1.10",
+    "@koromix/koffi-win32-x64": "3.1.1"
+  }
+}

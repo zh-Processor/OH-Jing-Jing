@@ -1,0 +1,40 @@
+{
+  "database": "data/group.db",
+  "host": "127.0.0.1",
+  "port": 8789,
+  "observeGroups": [],
+  "summaryGroups": [],
+  "recallGroups": [],
+  "roleExpressions": {},
+  "backupModels": {},
+  "modelProfiles": {},
+  "groupVisionProfiles": {},
+  "qqVoice": null,
+  "qqSpeech": null,
+  "summarizeAfter": 8,
+  "summaryTimeoutSeconds": 60,
+  "messageRetentionDays": 7,
+  "channel": {
+    "pluginId": "qq.onebot",
+    "address": "ws://127.0.0.1:3001",
+    "enabled": false,
+    "groups": [],
+    "roleId": "ohjingjing.dafeiyu",
+    "modelId": "reply-model",
+    "hasToken": true,
+    "cooldownSeconds": 20,
+    "recoverHistory": false
+  },
+  "model": {
+    "id": "reply-model",
+    "name": "DeepSeek",
+    "baseUrl": "https://api.deepseek.com/v1",
+    "model": "deepseek-chat",
+    "billing": "deepseek",
+    "hasKey": true,
+    "inputPrice": null,
+    "outputPrice": null,
+    "currency": "CNY",
+    "billingAccount": ""
+  }
+}

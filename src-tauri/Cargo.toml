@@ -1,0 +1,19 @@
+[package]
+name = "ohjingjing"
+version = "0.1.21"
+description = "Local companion and IM bot"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = { version = "2", features = ["tray-icon"] }
+keyring = { version = "3", features = ["windows-native"] }
+tauri-plugin-dialog = "2"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Dwm", "Win32_Graphics_Gdi", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+tauri-plugin-updater = "2.14"

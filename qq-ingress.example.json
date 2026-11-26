@@ -1,0 +1,10 @@
+{
+  "database": "data/qq-ingress.db",
+  "policyDatabase": "data/group.db",
+  "port": 8791,
+  "gateway": "ws://127.0.0.1:3001",
+  "hasGatewayToken": true,
+  "accountId": "机器人 QQ 账号",
+  "groups": [],
+  "privateContacts": []
+}
