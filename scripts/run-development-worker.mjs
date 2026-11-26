@@ -188,7 +188,9 @@ const driver = {
     for (const part of copied) await cp(join(source, part), join(directory, part), { recursive: true, errorOnExist: true });
     await cp(join(repository, "tests"), join(directory, ".baseline-tests"), { recursive: true, errorOnExist: true });
     await mkdir(join(directory, "scripts"));
-    await cp(join(repository, "scripts", "dsh-text-turn.mjs"), join(directory, "scripts", "dsh-text-turn.mjs"));
+    for (const name of ["dsh-text-turn.mjs", "model-thinking.mjs", "model-thinking.d.mts"]) {
+      await cp(join(repository, "scripts", name), join(directory, "scripts", name));
+    }
     await cp(join(repository, "tsconfig.json"), join(directory, "tsconfig.json"));
     if (base !== await contents(directory, copied)) throw new Error("复制期间代码基线已变化。");
     active = { directory, checkout, base, code: await contents(directory, ["runtime"]),
